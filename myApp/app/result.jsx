@@ -3,19 +3,20 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 
 export default function Result() {
   const router = useRouter();
-  const { score, won, opponentScore } = useLocalSearchParams();
+  const { score, won, opponentScore, draw } = useLocalSearchParams();
 
   const finalScore = parseInt(score) || 0;
   const finalOpponentScore = parseInt(opponentScore) || 0;
   const isWinner = won === 'true';
+  const isDraw = draw === 'true';
 
   return (
-    <View style={[styles.container, isWinner && styles.winnerContainer]}>
+    <View style={[styles.container, isWinner && styles.winnerContainer, isDraw && styles.drawContainer]}>
       <Text style={styles.title}>🏏 Game Over!</Text>
       
-      <View style={[styles.resultContainer, isWinner && styles.winnerResultContainer]}>
-        <Text style={isWinner ? styles.won : styles.lost}>
-          {isWinner ? '🏆 You Won!' : '😔 You Lost!'}
+      <View style={[styles.resultContainer, isWinner && styles.winnerResultContainer, isDraw && styles.drawResultContainer]}>
+        <Text style={isDraw ? styles.draw : (isWinner ? styles.won : styles.lost)}>
+          {isDraw ? '🤝 It\'s a Draw!' : (isWinner ? '🏆 You Won!' : '😔 You Lost!')}
         </Text>
         
         <View style={styles.scores}>
@@ -24,10 +25,10 @@ export default function Result() {
         </View>
         
         <Text style={styles.difficulty}>
-          {isWinner ? 'Congratulations!' : 'Better luck next time!'}
+          {isDraw ? 'Well matched!' : (isWinner ? 'Congratulations!' : 'Better luck next time!')}
         </Text>
         
-        {!isWinner && (
+        {!isWinner && !isDraw && (
           <View style={styles.inspirationContainer}>
             <Text style={styles.inspirationText}>💪 Don't give up!</Text>
             <Text style={styles.inspirationSubtext}>Every champion was once a beginner</Text>
@@ -40,6 +41,14 @@ export default function Result() {
             <Text style={styles.badge}>🏆</Text>
             <Text style={styles.badge}>⭐</Text>
             <Text style={styles.badge}>🎉</Text>
+          </View>
+        )}
+        
+        {isDraw && (
+          <View style={styles.drawBadges}>
+            <Text style={styles.badge}>🤝</Text>
+            <Text style={styles.badge}>⚖️</Text>
+            <Text style={styles.badge}>🎯</Text>
           </View>
         )}
       </View>
@@ -61,6 +70,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff8e1',
     borderWidth: 8,
     borderColor: '#ffd700',
+    borderRadius: 20,
+  },
+  drawContainer: {
+    backgroundColor: '#e8f5e8',
+    borderWidth: 8,
+    borderColor: '#4CAF50',
     borderRadius: 20,
   },
   title: {
@@ -90,6 +105,16 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  drawResultContainer: {
+    backgroundColor: '#e8f5e8',
+    borderWidth: 4,
+    borderColor: '#4CAF50',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   won: {
     fontSize: 28,
     color: '#4CAF50',
@@ -99,6 +124,12 @@ const styles = StyleSheet.create({
   lost: {
     fontSize: 28,
     color: '#F44336',
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  draw: {
+    fontSize: 28,
+    color: '#2196F3',
     fontWeight: 'bold',
     marginBottom: 20,
   },
@@ -116,6 +147,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   celebrationBadges: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 15,
+  },
+  drawBadges: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 15,

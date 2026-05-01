@@ -15,7 +15,7 @@ export default function Home() {
 
     socket.on('room_created', (roomCode) => {
       router.push({
-        pathname: '/create-room',
+        pathname: '/game',
         params: { roomCode },
       });
     });

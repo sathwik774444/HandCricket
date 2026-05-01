@@ -50,13 +50,19 @@ export default function Game() {
     // Log when component mounts and socket is ready
     console.log('🚀 Game component mounted, socket ID:', socket.id);
     
-    // Add a general listener to see all events
-    const handleAnyEvent = (eventName, ...args) => {
-      console.log('📡 Socket event received:', eventName, args);
-    };
+    let gameStartReceived = false;
+    let fallbackTimer = null;
     
     const handleGameStart = (data) => {
       const myId = socket.id;
+      gameStartReceived = true;
+      
+      // Clear fallback timer since we received proper game_start
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+      
       console.log('Game start received:', {
         myId,
         data,
@@ -80,15 +86,6 @@ export default function Game() {
       // Additional debugging for role assignment
       console.log('Final role set:', assignedRole, 'for player:', myId);
       
-      // Force role update after a delay to ensure it's set
-      setTimeout(() => {
-        console.log('Role verification - Current role:', role, 'Expected:', assignedRole);
-        if (role !== assignedRole) {
-          console.log('Role mismatch detected, forcing role update');
-          setRole(assignedRole);
-        }
-      }, 1000);
-      
       // Also log when game_start is received
       console.log('🎮 Game start event processed successfully for:', myId);
       setGameInfo(data);
@@ -97,16 +94,16 @@ export default function Game() {
       setCurrentTurnPhase('batsman'); // Always start with batsman's turn
     };
 
-    // Fallback: If no game_start received within 3 seconds, try to determine role manually
-    const fallbackTimer = setTimeout(() => {
-      if (role === '') {
+    // Fallback: If no game_start received within 1/2 second, try to determine role manually
+    fallbackTimer = setTimeout(() => {
+      if (!gameStartReceived) {
         console.log('⚠️ No game_start received, attempting manual role assignment for:', socket.id);
         // Try to get room info from backend or use a default
         setRole('bowling'); // Default to bowling for safety
         setCurrentTurnPhase('batsman');
         console.log('🔧 Assigned default role: bowling');
       }
-    }, 3000);
+    }, 500);
 
     const handleRound = (data) => {
       const myId = socket.id;
@@ -149,6 +146,7 @@ export default function Game() {
       // Check for game over
       if (data.gameOver) {
         const isWinner = data.winner === myId;
+        const isDraw = data.isDraw || false;
         
         // Safely get opponent score
         let opponentScore = 0;
@@ -160,7 +158,8 @@ export default function Game() {
         console.log('Game Over - Navigating to result:', {
           myScore: data.scores[myId] || 0,
           opponentScore,
-          isWinner
+          isWinner,
+          isDraw
         });
         
         router.push({
@@ -169,6 +168,7 @@ export default function Game() {
             score: data.scores[myId] || 0,
             won: isWinner,
             opponentScore: opponentScore,
+            draw: isDraw,
           },
         });
         return;
@@ -200,7 +200,9 @@ export default function Game() {
     socket.on('phase_change', handlePhaseChange);
 
     return () => {
-      clearTimeout(fallbackTimer);
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+      }
       socket.off('game_start', handleGameStart);
       socket.off('round_result', handleRound);
       socket.off('player_moved', handlePlayerMoved);
@@ -210,6 +212,15 @@ export default function Game() {
 
   return (
     <View style={styles.container}>
+      {/* Room Code Display */}
+      <View style={styles.roomCodeContainer}>
+        <Text style={styles.roomCodeLabel}>Room Code:</Text>
+        <Text style={styles.roomCode}>{room}</Text>
+        {role === '' && (
+          <Text style={styles.waitingText}>Waiting for opponent...</Text>
+        )}
+      </View>
+      
       <Text style={styles.title}>🏏 Hand Cricket</Text>
       
       {/* Role and Status */}
@@ -253,6 +264,16 @@ export default function Game() {
 
       {/* Game Controls */}
       {(() => {
+        // If no role assigned yet, show waiting state
+        if (role === '') {
+          return (
+            <View style={styles.gameArea}>
+              <Text style={styles.instruction}>🏏 Waiting for opponent to join...</Text>
+              <Text style={styles.waitingSubtext}>Share the room code above with your friend</Text>
+            </View>
+          );
+        }
+        
         const isBatsmanTurn = currentTurnPhase === 'batsman' && role === 'batting';
         const isBowlerTurn = currentTurnPhase === 'bowler' && role === 'bowling';
         const canPlay = isBatsmanTurn || isBowlerTurn;
@@ -306,9 +327,40 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    marginTop: 50,
+    marginTop: 30,
     padding: 20,
     backgroundColor: '#1a1a2e',
+  },
+  roomCodeContainer: {
+    backgroundColor: '#0f3460',
+    padding: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    marginBottom: 15,
+    width: '100%',
+    borderWidth: 2,
+    borderColor: '#e94560',
+  },
+  roomCodeLabel: {
+    fontSize: 14,
+    color: '#a8a8a8',
+    marginBottom: 5,
+  },
+  roomCode: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    backgroundColor: '#16213e',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e94560',
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#f39c12',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   title: {
     fontSize: 36,

@@ -72,33 +72,67 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Simple opposite role assignment
-    room.players.push(socket.id);
-    room.scores[socket.id] = 0;
-
-    // Always assign opposite to opponent's role
-    if (room.players.length === 2) {
-      // This is the second player - assign opposite to first player
-      if (room.currentBatsman && !room.currentBowler) {
-        // First player is batsman, so this player becomes bowler
-        room.currentBowler = socket.id;
-        console.log('Opposite role: Assigned as bowler (opponent is batsman)');
-      } else if (room.currentBowler && !room.currentBatsman) {
-        // First player is bowler, so this player becomes batsman
-        room.currentBatsman = socket.id;
-        console.log('Opposite role: Assigned as batsman (opponent is bowler)');
-      } else if (!room.currentBatsman && !room.currentBowler) {
-        // No roles assigned yet - use creator/joiner logic
-        room.currentBatsman = room.players[0]; // First player (creator) is batsman
-        room.currentBowler = socket.id;        // Second player (joiner) is bowler
-        console.log('Fallback: Creator as batsman, joiner as bowler');
-      } else {
-        // Both roles already assigned - this might be a reconnection
-        console.log('Both roles assigned - checking if this is a reconnection');
+    // Check if this is the room creator rejoining
+    const isCreatorRejoining = room.players[0] === socket.id;
+    
+    if (isCreatorRejoining) {
+      // Creator is rejoining - ensure they are the batsman
+      console.log('Room creator rejoining - ensuring batsman role:', {
+        socketId: socket.id,
+        before: {
+          currentBatsman: room.currentBatsman,
+          currentBowler: room.currentBowler
+        }
+      });
+      
+      // Force creator to be batsman and adjust other player if needed
+      if (room.currentBowler === socket.id) {
+        // Creator was incorrectly set as bowler, fix this
+        const otherPlayer = room.players.find(p => p !== socket.id);
+        room.currentBatsman = socket.id;  // Creator as batsman
+        room.currentBowler = otherPlayer; // Other player as bowler
+        console.log('Fixed role assignment - creator now batsman:', {
+          creator: room.currentBatsman,
+          otherPlayer: room.currentBowler
+        });
       }
+      
+      console.log('Room creator rejoined with roles:', {
+        socketId: socket.id,
+        currentBatsman: room.currentBatsman,
+        currentBowler: room.currentBowler
+      });
     } else {
-      // This shouldn't happen in normal flow, but handle it
-      console.log('Unexpected player count:', room.players.length);
+      // New player joining - add them first
+      room.players.push(socket.id);
+      room.scores[socket.id] = 0;
+
+      // Now we have 2 players, assign the second player as bowler (opposite of creator)
+      if (room.currentBatsman && !room.currentBowler) {
+        // Creator is batsman, so new player becomes bowler
+        room.currentBowler = socket.id;
+        console.log('Role assignment: Creator as batsman, new player as bowler', {
+          creator: room.currentBatsman,
+          bowler: room.currentBowler,
+          newPlayer: socket.id
+        });
+      } else if (!room.currentBatsman && room.currentBowler) {
+        // Creator is bowler, so new player becomes batsman
+        room.currentBatsman = socket.id;
+        console.log('Role assignment: Creator as bowler, new player as batsman', {
+          creator: room.currentBowler,
+          batsman: room.currentBatsman,
+          newPlayer: socket.id
+        });
+      } else {
+        // Fallback - ensure proper roles
+        room.currentBatsman = room.players[0]; // Creator as batsman
+        room.currentBowler = socket.id;        // New player as bowler
+        console.log('Fallback role assignment:', {
+          batsman: room.currentBatsman,
+          bowler: room.currentBowler
+        });
+      }
     }
 
     console.log('Player joined room:', {
@@ -118,6 +152,7 @@ io.on('connection', (socket) => {
       currentBatsman: room.currentBatsman,
       currentBowler: room.currentBowler,
       currentTurn: room.currentTurn,
+      currentPhase: room.currentPhase,
     };
     
     console.log('Sending game_start to all players:', gameStartData);
@@ -194,17 +229,26 @@ io.on('connection', (socket) => {
 
       // Determine winner if game is over
       let winner = null;
+      let isDraw = false;
       if (gameOver) {
         const player1Score = room.scores[room.players[0]];
         const player2Score = room.scores[room.players[1]];
-        winner = player1Score > player2Score ? room.players[0] : room.players[1];
+        
+        if (player1Score === player2Score) {
+          // It's a draw!
+          isDraw = true;
+          winner = null;
+        } else {
+          winner = player1Score > player2Score ? room.players[0] : room.players[1];
+        }
         
         console.log('Game Over - Final Scores:', {
           player1: room.players[0],
           player1Score: player1Score,
           player2: room.players[1], 
           player2Score: player2Score,
-          winner: winner
+          winner: winner,
+          isDraw: isDraw
         });
       }
 
@@ -221,6 +265,7 @@ io.on('connection', (socket) => {
         inningsChanged,
         gameOver,
         winner,
+        isDraw,
       });
 
       // Reset for next round
